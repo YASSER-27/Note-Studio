@@ -37,7 +37,7 @@ Keyboard-Centric: Extensive shortcut support for faster development.
 To run this project locally, follow these steps:
 ### 1. Clone the repository
 ```bash
-git clone [https://github.com/YASSER-27/Note-Studio.git](https://github.com/YASSER-27/Note-Studio.git)
+git clone https://github.com/YASSER-27/Note-Studio.git
 cd Note-Studio
 ```
 ### 2. Install dependencies
