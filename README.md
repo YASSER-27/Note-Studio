@@ -78,7 +78,6 @@ All shortcuts accessible from menu:
 ![png](example/app1.png)
 ![png](example/app2.png)
 ### v2.0.0
-![png](example/v2a.png)
 ![png](example/v2b.png)
 ![png](example/v2c.png)
 ## 📦 Installation Steps
