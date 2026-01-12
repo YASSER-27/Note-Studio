@@ -12,7 +12,7 @@
     "dist": "npm run build && electron-builder"
   },
   "keywords": ["editor", "code", "electron"],
-  "author": "Your Name",
+  "author": "Yasser27",
   "license": "MIT",
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
