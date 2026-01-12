@@ -1,4 +1,5 @@
 # 📝 NoteAI Studio
+![png](example/icon.png)
 
 > [!WARNING]
 > **Demo Version:** This is a preview release and not a final product.
@@ -10,6 +11,9 @@
 * **Dynamic File Management:** Tree-view explorer to manage projects and multiple tabs for a seamless workflow.
 * **Ultra-Compressed Build:** Optimized using `electron-builder` with maximum compression to ensure a small disk footprint.
 * **Keyboard-Centric:** Extensive shortcut support for faster development.
+* 
+![png](example/app1.png)
+![png](example/app2.png)
 
 ## 🛠 Tech Stack
 
