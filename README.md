@@ -13,8 +13,7 @@ note-studio/
 │   │   ├── TitleBar.jsx       ✅ Window controls
 │   │   ├── MenuBar.jsx        ✅ NEW - Menu bar with all options
 │   │   ├── Sidebar.jsx        ✅ File explorer
-│   │   ├── EditorContainer.jsx ✅ Editor & tabs
-│   │   └── ProjectModal.jsx   ✅ Project creation
+│   │   └── EditorContainer.jsx ✅ Editor & tabs
 │   │
 │   ├── App.jsx                ✅ Main component (updated)
 │   ├── App.css                ✅ Updated styles
@@ -28,7 +27,6 @@ note-studio/
 │
 ├── package.json               ✅ Updated dependencies
 ├── vite.config.js
-└── electron-builder.yml
 ```
 
 ## 🎯 New Features Added
@@ -80,6 +78,12 @@ All shortcuts accessible from menu:
 ### v2.0.0
 ![png](example/v2b.png)
 ![png](example/v2c.png)
+### v3.0.0 SOON (need more fix)
+![png](example/v3.0.0_1.png)
+![png](example/v3.0.0_2.png)
+![png](example/v3.0.0_3.png)
+![png](example/v3.0.0_4.png)
+![png](example/v3.0.0_5.png)
 ## 📦 Installation Steps
 
 ### Step 1: Install Dependencies
