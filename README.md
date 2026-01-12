@@ -1,16 +1,15 @@
-📝 NoteAI Studio
-NoteAI Studio is a professional, lightweight, and high-performance Integrated Development Environment (IDE) built with React and Electron. It provides a sleek, distraction-free environment for developers who value speed and efficiency.
+# 📝 NoteAI Studio
 
-🚀 Key Features
-Monaco Editor Integration: Powered by the same engine as VS Code, featuring syntax highlighting and smart indentation.
+> [!WARNING]
+> **Demo Version:** This is a preview release and not a final product.
+**NoteAI Studio** is a professional, lightweight, and high-performance **Integrated Development Environment (IDE)** built with React and Electron. It provides a sleek, distraction-free environment for developers who value speed and efficiency.
 
-Integrated Terminal: Fully functional terminal (xterm.js) with node-pty for direct system interaction.
-
-Dynamic File Management: Tree-view explorer to manage projects and multiple tabs for a seamless workflow.
-
-Ultra-Compressed Build: Optimized using electron-builder with maximum compression to ensure a small disk footprint.
-
-Keyboard-Centric: Extensive shortcut support for faster development.
+## 🚀 Key Features
+* **Monaco Editor Integration:** Powered by the same engine as VS Code, featuring syntax highlighting and smart indentation.
+* **Integrated Terminal:** Fully functional terminal (xterm.js) with `node-pty` for direct system interaction.
+* **Dynamic File Management:** Tree-view explorer to manage projects and multiple tabs for a seamless workflow.
+* **Ultra-Compressed Build:** Optimized using `electron-builder` with maximum compression to ensure a small disk footprint.
+* **Keyboard-Centric:** Extensive shortcut support for faster development.
 
 ## 🛠 Tech Stack
 
