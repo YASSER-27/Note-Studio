@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Editor, { loader } from '@monaco-editor/react';
+import { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 import {
-  FolderOpen, FileCode, X, Minimize2, Square, ChevronRight, Code, FilePlus, 
-  Zap, ChevronDown, FolderPlus, Trash2, Copy, Scissors, Clipboard, Info, 
-  Terminal, Plus, FolderPlus as NewFolder, Edit3, Monitor, Box, Loader
+  Copy, Scissors, Clipboard, Info, Terminal, Edit3, Trash2
 } from 'lucide-react';
 import './App.css';
+
+// Import Components
+import TitleBar from './components/TitleBar';
+import MenuBar from './components/MenuBar';
+import Sidebar from './components/Sidebar';
+import EditorContainer from './components/EditorContainer';
+import ProjectModal from './components/ProjectModal';
 
 const { ipcRenderer } = window.require('electron');
 loader.config({ monaco });
@@ -34,7 +39,6 @@ export default function App() {
   const [projectName, setProjectName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  // Drag & Drop
   const [draggedItem, setDraggedItem] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   
@@ -101,7 +105,6 @@ export default function App() {
     });
     
     if (res.success) {
-      // تحديث التابات إذا كان الملف مفتوحاً
       if (res.newPath) {
         setTabs(prev => prev.map(t => 
           t.path === draggedItem.path ? { ...t, path: res.newPath } : t
@@ -256,7 +259,7 @@ Type: ${info.isDirectory ? 'Directory' : 'File'}`);
     }
   };
 
-  // --- Create Project (محسّن مع Loading) ---
+  // --- Create Project ---
   const handleCreateProject = async () => {
     if (!projectName.trim()) {
       alert("Please enter a project name!");
@@ -417,6 +420,8 @@ Type: ${info.isDirectory ? 'Directory' : 'File'}`);
     ipcRenderer.on('open-terminal-trigger', handleOpenTerminal);
     ipcRenderer.on('toggle-sidebar', () => setSidebarVisible(prev => !prev));
     ipcRenderer.on('new-project-trigger', () => setShowProjectModal(true));
+	ipcRenderer.on('new-project-trigger', () => setShowProjectModal(true));
+	ipcRenderer.on('new-file-trigger', handleShortcutNewFile);
     
     ipcRenderer.on('folder-opened', (event, data) => {
       setFiles(data.files);
@@ -454,7 +459,7 @@ Type: ${info.isDirectory ? 'Directory' : 'File'}`);
       ipcRenderer.removeAllListeners('next-tab');
       ipcRenderer.removeAllListeners('prev-tab');
     };
-  }, [activeTabId, tabs.length, currentFolderPath]);
+	}, [activeTabId, tabs, currentFolderPath, isCreatingFile]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -466,191 +471,62 @@ Type: ${info.isDirectory ? 'Directory' : 'File'}`);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isRenaming]);
 
-  const FileTree = ({ items }) => (
-    <div className="tree-container">
-      {items.map((item, i) => (
-        <div key={i}>
-          {isRenaming && renamePath === item.path ? (
-            <div className="rename-input-container">
-              <input
-                ref={renameInputRef}
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={handleRenameSubmit}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRenameSubmit();
-                  if (e.key === 'Escape') { setIsRenaming(false); setRenamePath(null); }
-                }}
-                className="rename-input"
-              />
-            </div>
-          ) : (
-            <div 
-              className={`tree-item ${activeTab?.path === item.path ? 'active' : ''} ${selectedPath === item.path ? 'selected-for-delete' : ''} ${dropTarget === item.path ? 'drop-target' : ''}`}
-              draggable
-              onDragStart={(e) => handleDragStart(e, item)}
-              onDragOver={(e) => handleDragOver(e, item)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, item)}
-              onDragEnd={handleDragEnd}
-              onClick={() => handleFileClick(item)}
-              onContextMenu={(e) => handleContextMenu(e, item)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {item.isDirectory ? (
-                  expandedFolders[item.path] ? <ChevronDown size={14}/> : <ChevronRight size={14}/>
-                ) : (
-                  <FileCode size={14} color="#888"/>
-                )}
-                <span>{item.name}</span>
-              </div>
-            </div>
-          )}
-          {item.isDirectory && expandedFolders[item.path] && item.children && (
-            <div style={{ marginLeft: '12px', borderLeft: '1px solid #333' }}>
-              <FileTree items={item.children} />
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-
   return (
     <div className="app-main">
-      <div className="custom-title-bar">
-        <div className="brand-zone">
-          <Zap size={16} fill="#888" /> <span>Note Studio</span>
-        </div>
-        <div className="window-actions">
-          <button onClick={() => ipcRenderer.send('minimize-window')}><Minimize2 size={14}/></button>
-          <button onClick={() => ipcRenderer.send('maximize-window')}><Square size={14}/></button>
-          <button className="close-btn" onClick={() => ipcRenderer.send('close-window')}><X size={14}/></button>
-        </div>
-      </div>
+      <TitleBar />
+      <MenuBar />
 
       <div className="content-wrapper">
         {sidebarVisible && (
-          <aside className="app-sidebar">
-            <div className="sidebar-header">
-              <span>EXPLORER</span>
-              <div className="header-icons">
-                <FilePlus size={16} title="New Tab" onClick={createNewBlankTab} />
-                <Plus size={16} title="New File (Alt+A)" onClick={() => {
-                  if(!currentFolderPath) return alert("Open a folder first!");
-                  setIsCreatingFile(true);
-                  setTimeout(() => fileNameInputRef.current?.focus(), 50);
-                }} />
-                <NewFolder size={16} title="New Folder" onClick={() => {
-                  if(!currentFolderPath) return alert("Open a folder first!");
-                  setIsCreatingFolder(true);
-                  setTimeout(() => folderNameInputRef.current?.focus(), 50);
-                }} />
-                <FolderOpen size={16} title="Open Folder" onClick={handleOpenFolder} />
-              </div>
-            </div>
-            
-            <div className="explorer-content">
-              {isCreatingFile && (
-                <div className="new-file-input-container">
-                  <form onSubmit={handleCreateFileSubmit}>
-                    <input 
-                      ref={fileNameInputRef}
-                      value={newFileName}
-                      onChange={(e) => setNewFileName(e.target.value)}
-                      onBlur={() => { if(!newFileName) setIsCreatingFile(false); }}
-                      onKeyDown={(e) => { if(e.key === 'Escape') setIsCreatingFile(false); }}
-                      placeholder="filename.js"
-                      className="new-file-input"
-                    />
-                  </form>
-                </div>
-              )}
-              
-              {isCreatingFolder && (
-                <div className="new-file-input-container">
-                  <form onSubmit={handleCreateFolderSubmit}>
-                    <input 
-                      ref={folderNameInputRef}
-                      value={newFolderName}
-                      onChange={(e) => setNewFolderName(e.target.value)}
-                      onBlur={() => { if(!newFolderName) setIsCreatingFolder(false); }}
-                      onKeyDown={(e) => { if(e.key === 'Escape') setIsCreatingFolder(false); }}
-                      placeholder="folder-name"
-                      className="new-file-input"
-                    />
-                  </form>
-                </div>
-              )}
-              
-              {files.length > 0 ? <FileTree items={files} /> : (
-                <div className="no-folder-ui">
-                  <button className="gray-btn" onClick={handleOpenFolder}>Open Project</button>
-                  <button className="gray-btn" onClick={() => setShowProjectModal(true)}>New Project</button>
-                </div>
-              )}
-            </div>
-          </aside>
+          <Sidebar
+            files={files}
+            currentFolderPath={currentFolderPath}
+            isCreatingFile={isCreatingFile}
+            isCreatingFolder={isCreatingFolder}
+            newFileName={newFileName}
+            newFolderName={newFolderName}
+            isRenaming={isRenaming}
+            renamePath={renamePath}
+            renameValue={renameValue}
+            activeTab={activeTab}
+            selectedPath={selectedPath}
+            expandedFolders={expandedFolders}
+            dropTarget={dropTarget}
+            fileNameInputRef={fileNameInputRef}
+            folderNameInputRef={folderNameInputRef}
+            renameInputRef={renameInputRef}
+            setIsCreatingFile={setIsCreatingFile}
+            setIsCreatingFolder={setIsCreatingFolder}
+            setNewFileName={setNewFileName}
+            setNewFolderName={setNewFolderName}
+            setRenameValue={setRenameValue}
+            setIsRenaming={setIsRenaming}
+            setRenamePath={setRenamePath}
+            handleCreateFileSubmit={handleCreateFileSubmit}
+            handleCreateFolderSubmit={handleCreateFolderSubmit}
+            handleRenameSubmit={handleRenameSubmit}
+            handleOpenFolder={handleOpenFolder}
+            createNewBlankTab={createNewBlankTab}
+            setShowProjectModal={setShowProjectModal}
+            onFileClick={handleFileClick}
+            onContextMenu={handleContextMenu}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+          />
         )}
 
-        <main className="editor-container">
-          <div className="tabs-header">
-            <div className="tabs-wrapper-scroll">
-              {tabs.map(tab => (
-                <div key={tab.id} className={`tab-pill ${activeTabId === tab.id ? 'active' : ''}`} onClick={() => setActiveTabId(tab.id)}>
-                  <span className="tab-title">{tab.name}{tab.modified && '*'}</span>
-                  <X size={12} className="tab-close" onClick={(e) => { 
-                    e.stopPropagation(); 
-                    setTabs(prev => prev.filter(t => t.id !== tab.id)); 
-                    if (activeTabId === tab.id) setActiveTabId(null);
-                  }} />
-                </div>
-              ))}
-            </div>
-            {tabs.length > 0 && (
-              <div className="tabs-actions">
-                <button className="close-all-btn" onClick={closeAllTabs} title="Close All Tabs"><Trash2 size={14} /></button>
-              </div>
-            )}
-          </div>
-
-          <div className="editor-viewport">
-            {activeTab ? (
-              <Editor
-                height="100%"
-                theme="vs-dark"
-                language={activeTab.language}
-                value={activeTab.content}
-                onChange={(val) => setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, content: val, modified: true } : t))}
-                onMount={(editor) => { editorRef.current = editor; }}
-                options={{ 
-                  fontSize: 15, 
-                  automaticLayout: true, 
-                  minimap: { enabled: true }, 
-                  wordWrap: "on", 
-                  scrollBeyondLastLine: false,
-                  tabSize: 2,
-                  formatOnPaste: true,
-                  formatOnType: true
-                }}
-              />
-            ) : (
-              <div className="welcome-screen">
-                <Code size={80} color="#333" />
-                <div className="shortcut-list">
-                  <div className="s-item"><span>Ctrl + Shift + N</span> New Project</div>
-                  <div className="s-item"><span>Ctrl + N</span> New Tab</div>
-                  <div className="s-item"><span>Ctrl + O</span> Open Folder</div>
-                  <div className="s-item"><span>Ctrl + S</span> Save File</div>
-                  <div className="s-item"><span>Alt + A</span> New File</div>
-                  <div className="s-item"><span>Ctrl + `</span> Open Terminal</div>
-                  <div className="s-item"><span>Ctrl + B</span> Toggle Sidebar</div>
-                  <div className="s-item"><span>Drag & Drop</span> Move Files</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </main>
+        <EditorContainer
+          tabs={tabs}
+          activeTabId={activeTabId}
+          activeTab={activeTab}
+          editorRef={editorRef}
+          setActiveTabId={setActiveTabId}
+          setTabs={setTabs}
+          closeAllTabs={closeAllTabs}
+        />
       </div>
 
       {/* Context Menu */}
@@ -686,58 +562,16 @@ Type: ${info.isDirectory ? 'Directory' : 'File'}`);
         </div>
       )}
 
-      {/* New Project Modal (محسّن) */}
-      {showProjectModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>Create New Project</h3>
-            
-            {isLoading ? (
-              <div className="loading-state">
-                <Loader size={40} className="spin-anim" color="#007acc" />
-                <p style={{marginTop: 15, color: '#ccc'}}>
-                  Creating <b>{projectType}</b> project...
-                </p>
-                <p style={{fontSize: 12, color: '#666'}}>
-                  {projectType === 'electron' ? 'Installing Vite template (this may take a moment)...' : 'Setting up file structure...'}
-                </p>
-              </div>
-            ) : (
-              <>
-                {!projectType ? (
-                  <div className="project-types">
-                    <div className="p-card" onClick={() => setProjectType('electron')}>
-                      <Monitor size={32} color="#61dafb" />
-                      <span>Electron (Vite)</span>
-                    </div>
-                    <div className="p-card" onClick={() => setProjectType('python')}>
-                      <Box size={32} color="#ffe873" />
-                      <span>Python Pro</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="project-form">
-                    <p>Project Type: <b>{projectType === 'electron' ? 'Electron + React (Vite)' : 'Python Project'}</b></p>
-                    <input 
-                      type="text" 
-                      placeholder="Project Name (e.g., my-app)" 
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value.replace(/\s/g, '-'))}
-                      autoFocus
-                    />
-                    <div className="modal-actions">
-                      <button onClick={handleCreateProject}>
-                        Create on Desktop
-                      </button>
-                      <button className="cancel" onClick={() => { setProjectType(null); setShowProjectModal(false); }}>Cancel</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <ProjectModal
+        showProjectModal={showProjectModal}
+        isLoading={isLoading}
+        projectType={projectType}
+        projectName={projectName}
+        setProjectType={setProjectType}
+        setProjectName={setProjectName}
+        setShowProjectModal={setShowProjectModal}
+        handleCreateProject={handleCreateProject}
+      />
     </div>
   );
 }

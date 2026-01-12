@@ -1,50 +1,41 @@
 {
-  "name": "code-editor-pro",
-  "version": "1.0.0",
-  "description": "محرر أكواد احترافي مبني على React و Electron",
+  "name": "note-studio",
+  "version": "2.0.0",
+  "description": "Professional Code Editor with Advanced Features",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
-    "dev:vite": "vite",
-    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "dev": "vite",
     "build": "vite build",
-    "build:electron": "electron-builder",
-    "preview": "vite preview",
-    "package": "npm run build && npm run build:electron"
+    "electron": "electron .",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "pack": "electron-builder --dir",
+    "dist": "npm run build && electron-builder"
   },
-  "keywords": [
-    "code-editor",
-    "electron",
-    "react",
-    "notepad++",
-    "vscode"
-  ],
+  "keywords": ["editor", "code", "electron"],
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "@monaco-editor/react": "^4.7.0",
+    "@monaco-editor/react": "^4.6.0",
     "lucide-react": "^0.263.1",
-    "monaco-editor": "^0.55.1",
-    "node-pty": "^1.1.0",
+    "monaco-editor": "^0.44.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "xterm": "^5.3.0",
-    "xterm-addon-fit": "^0.8.0"
+    "archiver": "^6.0.1",
+    "extract-zip": "^2.0.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^4.2.0",
     "concurrently": "^8.2.2",
     "electron": "^28.0.0",
-    "electron-builder": "^24.13.3",
-    "electron-rebuild": "^3.2.9",
+    "electron-builder": "^24.9.1",
     "vite": "^5.0.8",
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.codeeditor.app",
-    "productName": "Code Editor Pro",
+    "appId": "com.notestudio.app",
+    "productName": "Note Studio",
     "directories": {
-      "output": "dist-electron"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
@@ -52,27 +43,16 @@
       "assets/**/*"
     ],
     "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "include": "electron/installer.nsh"
-    },
-    "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "assets/icon.icns"
+      "target": ["nsis"],
+      "icon": "assets/icon.png"
     },
     "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "icon": "assets/icon.png"
+      "target": ["AppImage"],
+      "category": "Development"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.developer-tools"
     }
   }
 }

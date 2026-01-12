@@ -4,10 +4,14 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const { exec } = require('child_process');
 const os = require('os');
+const archiver = require('archiver'); // npm install archiver
 
 let mainWindow;
 let currentProjectPath = "";
 let clipboard = { type: null, path: null };
+let autoSaveInterval = null;
+let autoSaveEnabled = true;
+let backupFolder = path.join(app.getPath('userData'), 'backups');
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -35,6 +39,8 @@ function createWindow() {
   }
 
   setupAppMenu();
+  initAutoSave();
+  ensureBackupFolder();
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -47,6 +53,60 @@ function createWindow() {
       }
     }
   });
+
+  mainWindow.on('close', () => {
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
+  });
+}
+
+async function ensureBackupFolder() {
+  try {
+    if (!fsSync.existsSync(backupFolder)) {
+      await fs.mkdir(backupFolder, { recursive: true });
+    }
+  } catch (err) {
+    console.error('Error creating backup folder:', err);
+  }
+}
+
+function initAutoSave() {
+  if (autoSaveEnabled) {
+    autoSaveInterval = setInterval(async () => {
+      if (currentProjectPath) {
+        await createBackup(currentProjectPath);
+      }
+    }, 5 * 60 * 1000); // كل 5 دقائق
+  }
+}
+
+async function createBackup(projectPath) {
+  try {
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const projectName = path.basename(projectPath);
+    const backupName = `${projectName}_${timestamp}`;
+    const backupPath = path.join(backupFolder, backupName);
+    
+    await fs.cp(projectPath, backupPath, { recursive: true });
+    console.log('Backup created:', backupPath);
+    
+    // حذف النسخ الاحتياطية القديمة (أكثر من 10)
+    await cleanOldBackups();
+  } catch (err) {
+    console.error('Backup error:', err);
+  }
+}
+
+async function cleanOldBackups() {
+  try {
+    const backups = await fs.readdir(backupFolder);
+    if (backups.length > 10) {
+      backups.sort().slice(0, backups.length - 10).forEach(async (backup) => {
+        await fs.rm(path.join(backupFolder, backup), { recursive: true, force: true });
+      });
+    }
+  } catch (err) {
+    console.error('Error cleaning backups:', err);
+  }
 }
 
 function setupAppMenu() {
@@ -58,9 +118,12 @@ function setupAppMenu() {
         { label: 'New File', accelerator: 'Alt+A', click: () => mainWindow.webContents.send('new-file-trigger') },
         { label: 'New Tab', accelerator: 'CmdOrCtrl+N', click: () => mainWindow.webContents.send('new-blank-tab') },
         { label: 'Open Folder', accelerator: 'CmdOrCtrl+O', click: () => handleOpenFolder() },
+        { label: 'Load Project', accelerator: 'CmdOrCtrl+L', click: () => handleLoadProject() },
         { type: 'separator' },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => mainWindow.webContents.send('save-trigger') },
         { label: 'Save As', accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow.webContents.send('save-as-trigger') },
+        { type: 'separator' },
+        { label: 'Export as ZIP', accelerator: 'CmdOrCtrl+E', click: () => handleExportProject() },
         { type: 'separator' },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => mainWindow.webContents.send('close-tab') },
       ]
@@ -94,13 +157,150 @@ function setupAppMenu() {
     {
       label: 'Terminal',
       submenu: [
-        { label: 'Open Terminal Here', accelerator: 'Ctrl+`', click: () => mainWindow.webContents.send('open-terminal-trigger') }
+        { label: 'Open Terminal Here', accelerator: 'Alt+R', click: () => ipcMain.emit('open-terminal-trigger') }
+      ]
+    },
+    {
+      label: 'Recovery',
+      submenu: [
+        { label: 'Auto-Save Settings', click: () => toggleAutoSave() },
+        { label: 'Restore Backup', click: () => handleRestoreBackup() },
+        { type: 'separator' },
+        { label: 'View All Backups', click: () => shell.openPath(backupFolder) }
       ]
     }
   ];
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+}
+
+function toggleAutoSave() {
+  autoSaveEnabled = !autoSaveEnabled;
+  if (autoSaveEnabled) {
+    initAutoSave();
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Auto-Save',
+      message: 'Auto-Save is now ENABLED (every 5 minutes)'
+    });
+  } else {
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Auto-Save',
+      message: 'Auto-Save is now DISABLED'
+    });
+  }
+}
+
+async function handleRestoreBackup() {
+  try {
+    const backups = await fs.readdir(backupFolder);
+    if (backups.length === 0) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        message: 'No backups found'
+      });
+      return;
+    }
+
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      buttons: backups.slice(-5).reverse(), // آخر 5 نسخ
+      title: 'Restore Backup',
+      message: 'Select a backup to restore:'
+    });
+
+    const selectedBackup = backups.slice(-5).reverse()[response];
+    const backupPath = path.join(backupFolder, selectedBackup);
+    
+    currentProjectPath = backupPath;
+    const files = await fetchDirectory(backupPath);
+    mainWindow.webContents.send('folder-opened', { path: backupPath, files });
+    
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      message: 'Backup restored successfully!'
+    });
+  } catch (err) {
+    dialog.showErrorBox('Error', 'Failed to restore backup: ' + err.message);
+  }
+}
+
+async function handleExportProject() {
+  if (!currentProjectPath) {
+    dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      message: 'No project is currently open!'
+    });
+    return;
+  }
+
+  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export Project as ZIP',
+    defaultPath: path.join(app.getPath('desktop'), path.basename(currentProjectPath) + '.zip'),
+    filters: [{ name: 'ZIP Files', extensions: ['zip'] }]
+  });
+
+  if (!filePath) return;
+
+  try {
+    const output = fsSync.createWriteStream(filePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        message: `Project exported successfully!\nSize: ${(archive.pointer() / 1024 / 1024).toFixed(2)} MB`
+      });
+    });
+
+    archive.on('error', (err) => {
+      throw err;
+    });
+
+    archive.pipe(output);
+    archive.directory(currentProjectPath, false);
+    await archive.finalize();
+  } catch (err) {
+    dialog.showErrorBox('Export Error', err.message);
+  }
+}
+
+async function handleLoadProject() {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'ZIP Files', extensions: ['zip'] }]
+  });
+
+  if (canceled) return;
+
+  const zipPath = filePaths[0];
+  const extractPath = path.join(app.getPath('temp'), 'note-studio-extract');
+
+  try {
+    // حذف المجلد المؤقت إن وُجد
+    if (fsSync.existsSync(extractPath)) {
+      fsSync.rmSync(extractPath, { recursive: true, force: true });
+    }
+    await fs.mkdir(extractPath, { recursive: true });
+
+    // استخراج الملف (يحتاج مكتبة extract-zip)
+    const extract = require('extract-zip');
+    await extract(zipPath, { dir: extractPath });
+
+    currentProjectPath = extractPath;
+    const files = await fetchDirectory(extractPath);
+    mainWindow.webContents.send('folder-opened', { path: extractPath, files });
+
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      message: 'Project loaded successfully!'
+    });
+  } catch (err) {
+    dialog.showErrorBox('Load Error', err.message);
+  }
 }
 
 async function fetchDirectory(dirPath) {
@@ -212,7 +412,6 @@ ipcMain.handle('save-file-as', async (event, content) => {
   } catch (err) { return { success: false }; }
 });
 
-// --- نسخ ولصق ---
 ipcMain.handle('copy-file', async (e, itemPath) => {
   clipboard = { type: 'copy', path: itemPath };
   return { success: true };
@@ -248,18 +447,15 @@ ipcMain.handle('paste-file', async (e, targetDir) => {
   }
 });
 
-// --- نقل الملفات (Drag & Drop) ---
 ipcMain.handle('move-file', async (e, { sourcePath, targetDir }) => {
   try {
     const fileName = path.basename(sourcePath);
     const newPath = path.join(targetDir, fileName);
     
-    // التحقق من عدم نقل المجلد لنفسه
     if (sourcePath === targetDir || newPath === sourcePath) {
       return { success: false, error: 'Cannot move to same location' };
     }
     
-    // التحقق من عدم نقل مجلد داخل نفسه
     if (newPath.startsWith(sourcePath + path.sep)) {
       return { success: false, error: 'Cannot move folder into itself' };
     }
@@ -272,7 +468,6 @@ ipcMain.handle('move-file', async (e, { sourcePath, targetDir }) => {
   }
 });
 
-// --- إعادة تسمية ---
 ipcMain.handle('rename-item', async (e, { oldPath, newPath }) => {
   try {
     await fs.rename(oldPath, newPath);
@@ -283,7 +478,6 @@ ipcMain.handle('rename-item', async (e, { oldPath, newPath }) => {
   }
 });
 
-// --- فحص الملفات ---
 ipcMain.handle('check-file', async (e, filePath) => {
   try {
     const stats = await fs.stat(filePath);
@@ -303,7 +497,6 @@ ipcMain.handle('check-file', async (e, filePath) => {
   }
 });
 
-// --- فتح Terminal ---
 ipcMain.handle('open-terminal', async (e, dirPath) => {
   try {
     const platform = os.platform();
@@ -324,22 +517,18 @@ ipcMain.handle('open-terminal', async (e, dirPath) => {
   }
 });
 
-// --- إنشاء مشروع جديد (نسخة محسّنة) ---
 ipcMain.handle('create-project', async (e, { type, name }) => {
   const desktopPath = app.getPath('desktop');
   const projectPath = path.join(desktopPath, name);
   
   try {
-    // التحقق من وجود المجلد
     if (fsSync.existsSync(projectPath)) {
       return { success: false, error: 'Folder already exists on Desktop' };
     }
     
-    // إنشاء المجلد الرئيسي
     await fs.mkdir(projectPath);
     
     if (type === 'python') {
-      // --- مشروع Python احترافي ---
       const mainCode = `# Project: ${name}\nimport os\n\ndef main():\n    print("Hello from ${name}!")\n    # Write your code here\n\nif __name__ == "__main__":\n    main()\n`;
       
       await fs.writeFile(path.join(projectPath, 'main.py'), mainCode);
@@ -354,7 +543,6 @@ ipcMain.handle('create-project', async (e, { type, name }) => {
       return { success: true };
       
     } else if (type === 'electron') {
-      // --- مشروع Electron + Vite ---
       const command = `npm create vite@latest . -- --template react`;
       
       return new Promise((resolve) => {
@@ -368,7 +556,6 @@ ipcMain.handle('create-project', async (e, { type, name }) => {
             return;
           }
           
-          // إنشاء ملف توضيحي
           const helpText = `# ${name}\n\nElectron + React (Vite) project created with Note Studio.\n\n## Setup:\n\`\`\`bash\nnpm install\nnpm run dev\n\`\`\``;
           await fs.writeFile(path.join(projectPath, 'NOTE_STUDIO_README.md'), helpText);
           
@@ -385,7 +572,6 @@ ipcMain.handle('create-project', async (e, { type, name }) => {
   }
 });
 
-// --- إنشاء مجلد ---
 ipcMain.handle('create-folder', async (e, { parentPath, folderName }) => {
   try {
     const newFolderPath = path.join(parentPath, folderName);
@@ -397,12 +583,67 @@ ipcMain.handle('create-folder', async (e, { parentPath, folderName }) => {
   }
 });
 
-// --- Window Controls ---
+// IPC Listeners for Menu Bar
+ipcMain.on('open-folder-trigger', handleOpenFolder);
+ipcMain.on('load-project-trigger', handleLoadProject);
+ipcMain.on('export-project-trigger', handleExportProject);
+ipcMain.on('auto-save-settings-trigger', toggleAutoSave);
+ipcMain.on('restore-backup-trigger', handleRestoreBackup);
+ipcMain.on('show-backups-trigger', () => shell.openPath(backupFolder));
+ipcMain.on('show-shortcuts-trigger', () => {
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Keyboard Shortcuts',
+    message: `
+Ctrl+Shift+N - New Project
+Ctrl+N - New Tab
+Ctrl+O - Open Folder
+Ctrl+S - Save
+Ctrl+E - Export ZIP
+Ctrl+L - Load Project
+Alt+A - New File
+Alt+R - Terminal
+Ctrl+B - Toggle Sidebar
+    `
+  });
+});
+
 ipcMain.on('minimize-window', () => mainWindow.minimize());
 ipcMain.on('maximize-window', () => {
     mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
 });
 ipcMain.on('close-window', () => mainWindow.close());
+// --- أضف هذا الجزء لربط أزرار المنيو بار بالواجهة ---
+const forwardEvents = [
+  'new-project-trigger',
+  'new-file-trigger',
+  'new-blank-tab',
+  'toggle-sidebar',
+  'next-tab',
+  'prev-tab',
+  'copy-file-trigger',
+  'paste-file-trigger',
+  'delete-file-trigger'
+];
 
+forwardEvents.forEach(event => {
+  ipcMain.on(event, () => {
+    if (mainWindow) mainWindow.webContents.send(event);
+  });
+});
+ipcMain.on('open-terminal-trigger', () => {
+  // هنا نقوم بتشغيل التيرمينال مباشرة من الماين بروسيس
+  // نستخدم المجلد المفتوح حالياً (currentProjectPath)
+  const pathTarget = currentProjectPath || os.homedir(); 
+  
+  const platform = os.platform();
+  if (platform === 'win32') {
+    exec(`start cmd /K cd /d "${pathTarget}"`);
+  } else if (platform === 'darwin') {
+    exec(`open -a Terminal "${pathTarget}"`);
+  } else {
+    exec(`gnome-terminal --working-directory="${pathTarget}"`);
+  }
+});
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
