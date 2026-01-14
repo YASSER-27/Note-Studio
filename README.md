@@ -78,7 +78,7 @@ All shortcuts accessible from menu:
 ### v2.0.0
 ![png](example/v2b.png)
 ![png](example/v2c.png)
-### v3.0.1 SOON (need more fix)
+### v3.0.1
 ![png](example/v3.0.0_1.png)
 ![png](example/v3.0.0_2.png)
 ![png](example/v3.0.0_3.png)
